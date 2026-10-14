@@ -27,7 +27,7 @@ const deployEnvSchema = z.object({
   DEPLOY_R2_BUCKET_NAME: optionalName,
   // Optional Wrangler preview bucket; falls back to DEPLOY_R2_BUCKET_NAME when R2 is enabled
   DEPLOY_R2_PREVIEW_BUCKET_NAME: optionalName,
-  DEPLOY_ANALYTICS_DATASET: defaultName,
+  DEPLOY_ANALYTICS_DATASET: optionalName,
 })
 
 async function loadEnv() {
@@ -70,13 +70,19 @@ if (parseErrors.length > 0) {
 const env = await loadEnv()
 const d1 = getBinding(config, 'd1_databases', 'DB')
 const kv = getBinding(config, 'kv_namespaces', 'KV')
-const analytics = getBinding(config, 'analytics_engine_datasets', 'ANALYTICS')
 
 d1.database_id = env.DEPLOY_D1_DATABASE_ID
 d1.database_name = env.DEPLOY_D1_DATABASE_NAME
 kv.id = env.DEPLOY_KV_NAMESPACE_ID
 kv.preview_id = env.DEPLOY_KV_PREVIEW_NAMESPACE_ID ?? env.DEPLOY_KV_NAMESPACE_ID
-analytics.dataset = env.DEPLOY_ANALYTICS_DATASET
+
+if (env.DEPLOY_ANALYTICS_DATASET && env.DEPLOY_ANALYTICS_DATASET !== 'false' && env.DEPLOY_ANALYTICS_DATASET !== 'none') {
+  const analytics = getBinding(config, 'analytics_engine_datasets', 'ANALYTICS')
+  analytics.dataset = env.DEPLOY_ANALYTICS_DATASET
+}
+else {
+  config.analytics_engine_datasets = (config.analytics_engine_datasets || []).filter(({ binding }) => binding !== 'ANALYTICS')
+}
 
 if (env.DEPLOY_R2_BUCKET_NAME) {
   const r2 = getBinding(config, 'r2_buckets', 'R2')
