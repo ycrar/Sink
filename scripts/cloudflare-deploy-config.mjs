@@ -91,6 +91,7 @@ if (env.DEPLOY_R2_BUCKET_NAME) {
 }
 else {
   config.r2_buckets = config.r2_buckets.filter(({ binding }) => binding !== 'R2')
+  delete config.triggers
 }
 
 await writeFile(outputPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8')
