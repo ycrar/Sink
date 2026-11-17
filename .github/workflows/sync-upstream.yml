@@ -1,0 +1,65 @@
+name: Safe Upstream Sync & Keepalive
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/sync-upstream.yml'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch and push to upstream-sync branch
+        env:
+          UPSTREAM_REPO: "https://github.com/miantiao-me/Sink.git"
+          UPSTREAM_BRANCH: "master"
+        run: |
+          git remote add upstream "$UPSTREAM_REPO"
+          git fetch upstream "$UPSTREAM_BRANCH"
+          git push origin "upstream/$UPSTREAM_BRANCH:refs/heads/upstream-sync" --force
+
+      - name: Create Pull Request to master
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet HEAD "upstream/master"; then
+            echo "No differences found between upstream and master."
+          else
+            gh pr create \
+              --base master \
+              --head upstream-sync \
+              --title "chore: sync latest upstream updates" \
+              --body "自動同步上游最新更新，請確認變更後手動合併。" || true
+          fi
+
+      - name: Keepalive Workflow
+        run: |
+          LAST_COMMIT_TIME=$(git log -1 --format=%ct)
+          NOW=$(date +%s)
+          DAYS_DIFF=$(( (NOW - LAST_COMMIT_TIME) / 86400 ))
+
+          if [ $DAYS_DIFF -gt 50 ]; then
+            echo "偵測到已超過 50 天無更新，觸發保活機制..."
+            mkdir -p .github
+            date -u > .github/.keepalive
+            git add .github/.keepalive
+            git commit -m "chore: keepalive scheduled workflows [skip ci]"
+            git push origin HEAD
+          fi
